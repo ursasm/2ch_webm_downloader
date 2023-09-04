@@ -63,7 +63,9 @@ def task_finished_print(total_count: int):
 
 
 async def main():
-    thread_url = input('Введите URL треда: ')
+    thread_url = input(
+        'Введите URL треда (например: 2ch.hk/b/res/777777777.html или https://2ch.life/b/res/123456789.html): '
+    )
     try:
         board, thread = parse_url(thread_url)
     except IndexError as e:
