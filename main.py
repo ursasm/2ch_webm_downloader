@@ -6,7 +6,7 @@ from random import choice
 import aiohttp
 import asyncio
 
-from typing import Tuple
+from typing import Tuple, Generator
 
 URL_2CH = 'https://2ch.hk/'
 API_URL_2CH = f'https://2ch.hk/api/mobile/v2/'
@@ -41,7 +41,7 @@ def extract_files_urls(resp_json: dict) -> list:
     return file_urls
 
 
-async def download_file(session, url, save_path):
+async def download_file(session, url, save_path, update_progress: Generator):
     async with session.get(url) as response:
         if response.status == 200:
             with open(save_path, 'wb+') as file:
@@ -52,6 +52,26 @@ async def download_file(session, url, save_path):
                     file.write(chunk)
         else:
             print(f"Не удалось скачать файл {url}. Статус код: {response.status}")
+    update_progress.send(1)
+
+
+async def progress_updater(tasks: list):
+    total_tasks_count = len(tasks)
+    complied_tasks_count = len(list(filter(lambda cond: cond, [t.done() for t in tasks])))
+    while complied_tasks_count < total_tasks_count:
+        await asyncio.sleep(0.5)
+        print(f"\rПрогресс: {complied_tasks_count}/{total_tasks_count}", end="", flush=True)
+        complied_tasks_count = len(list(filter(lambda cond: cond, [t.done() for t in tasks])))
+
+    print("\nЗагрузка завершена")
+
+
+def task_finished_print(total_count: int):
+    count = 0
+    while count <= total_count:
+        print(f"\rЗагрузка: {count}/{total_count}", end="", flush=True)
+        _ = yield
+        count += 1
 
 
 async def main():
@@ -76,8 +96,12 @@ async def main():
         file_urls = extract_files_urls(resp_json)
         folder_path = f'{FOLDER_NAME}_{board}_{thread}'
         os.makedirs(folder_path, exist_ok=True)
+
+        gen = task_finished_print(len(file_urls))
+        next(gen)
+
         await asyncio.gather(*[
-            download_file(session, d['url'], os.path.join(folder_path, d['name'])) for d in file_urls
+            download_file(session, d['url'], os.path.join(folder_path, d['name']), gen) for d in file_urls
         ])
 
 if __name__ == "__main__":
