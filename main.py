@@ -52,19 +52,7 @@ async def download_file(session, url, save_path, update_progress: Generator):
                     file.write(chunk)
         else:
             print(f"Не удалось скачать файл {url}. Статус код: {response.status}")
-    update_progress.send(1)
-
-
-async def progress_updater(tasks: list):
-    total_tasks_count = len(tasks)
-    complied_tasks_count = len(list(filter(lambda cond: cond, [t.done() for t in tasks])))
-    while complied_tasks_count < total_tasks_count:
-        await asyncio.sleep(0.5)
-        print(f"\rПрогресс: {complied_tasks_count}/{total_tasks_count}", end="", flush=True)
-        complied_tasks_count = len(list(filter(lambda cond: cond, [t.done() for t in tasks])))
-
-    print("\nЗагрузка завершена")
-
+    next(update_progress)
 
 def task_finished_print(total_count: int):
     count = 0
