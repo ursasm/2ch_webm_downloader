@@ -12,19 +12,25 @@ URL_2CH = 'https://2ch.hk/'
 API_URL_2CH = f'https://2ch.hk/api/mobile/v2/'
 FOLDER_NAME = '2ch_files'
 
+
 def parse_url(url: str) -> Tuple[str, str]:
     url = url.strip().rstrip('.html')
-    url_split =  url.split('/')
+    url_split = url.split('/')
     try:
         board = url_split[-3]
         thread = url_split[-1]
     except IndexError:
         raise IndexError('Ссылка не корректная. Пример ссылки: https://2ch.life/b/res/292606618.html')
 
+    if not board.isalpha():
+        raise ValueError('Некорректное название доски: ' + board)
+    if not thread.isdigit():
+        raise ValueError('Некорректный номер треда: ' + thread)
+
     return board, thread
 
 
-def randomize_filename(name: str = '', length = 7) -> str:
+def randomize_filename(name: str = '', length=7) -> str:
     rand_part = ''.join(choice(string.ascii_letters + string.digits) for _ in range(length))
     return f'{rand_part}_{name}'
 
@@ -54,6 +60,7 @@ async def download_file(session, url, save_path, update_progress: Generator):
             print(f"Не удалось скачать файл {url}. Статус код: {response.status}")
     next(update_progress)
 
+
 def task_finished_print(total_count: int):
     count = 0
     while count <= total_count:
@@ -68,8 +75,9 @@ async def main():
     )
     try:
         board, thread = parse_url(thread_url)
-    except IndexError as e:
+    except (IndexError, ValueError) as e:
         print(str(e))
+        _ = input('Введите Enter для выхода')
         return
 
     async with aiohttp.ClientSession() as session:
@@ -81,6 +89,7 @@ async def main():
                 assert resp_json.get('posts') is not None, 'Не корректный ответ. Отсутствует список постов'
         except (aiohttp.ClientError, AssertionError) as e:
             print(str(e))
+            _ = input('Введите Enter для выхода')
             return
 
         file_urls = extract_files_urls(resp_json)
@@ -93,6 +102,7 @@ async def main():
         await asyncio.gather(*[
             download_file(session, d['url'], os.path.join(folder_path, d['name']), gen) for d in file_urls
         ])
+
 
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(main())
