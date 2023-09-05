@@ -42,23 +42,25 @@ def extract_files_urls(resp_json: dict) -> list:
             for file in post['files']:
                 file_urls.append({
                     'name': randomize_filename(file['name']),
-                    'url': urljoin(URL_2CH, file['path'])
+                    'url': urljoin(URL_2CH, file['path']),
+                    'size': int(file['size'])
                 })
     return file_urls
 
 
-async def download_file(session, url, save_path, update_progress: Generator):
-    async with session.get(url) as response:
-        if response.status == 200:
-            with open(save_path, 'wb+') as file:
-                while True:
-                    chunk = await response.content.read(1024)
-                    if not chunk:
-                        break
-                    file.write(chunk)
-        else:
-            print(f"Не удалось скачать файл {url}. Статус код: {response.status}")
-    next(update_progress)
+async def download_file(
+        session: aiohttp.ClientSession, url: str, save_path: str, size: int,
+        update_progress: Generator, semaphore: asyncio.Semaphore
+):
+    async with semaphore:
+        async with session.get(url) as response:
+            if response.status == 200:
+                with open(save_path, 'wb+') as file:
+                    file_bytes = await response.content.read(size)
+                    file.write(file_bytes)
+            else:
+                print(f"\nНе удалось скачать файл {url}. Статус код: {response.status}\n")
+        next(update_progress)
 
 
 def task_finished_print(total_count: int):
@@ -98,9 +100,17 @@ async def main():
 
         gen = task_finished_print(len(file_urls))
         next(gen)
+        semaphore = asyncio.Semaphore(6)
 
         await asyncio.gather(*[
-            download_file(session, d['url'], os.path.join(folder_path, d['name']), gen) for d in file_urls
+            download_file(
+                session,
+                d['url'],
+                os.path.join(folder_path, d['name']),
+                d['size'],
+                gen,
+                semaphore
+            ) for d in file_urls
         ])
 
 
