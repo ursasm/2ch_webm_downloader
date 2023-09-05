@@ -43,21 +43,23 @@ def extract_files_urls(resp_json: dict) -> list:
                 file_urls.append({
                     'name': randomize_filename(file['name']),
                     'url': urljoin(URL_2CH, file['path']),
-                    'size': int(file['size'])
                 })
     return file_urls
 
 
 async def download_file(
-        session: aiohttp.ClientSession, url: str, save_path: str, size: int,
+        session: aiohttp.ClientSession, url: str, save_path: str,
         update_progress: Generator, semaphore: asyncio.Semaphore
 ):
     async with semaphore:
         async with session.get(url) as response:
             if response.status == 200:
                 with open(save_path, 'wb+') as file:
-                    file_bytes = await response.content.read(size)
-                    file.write(file_bytes)
+                    while True:
+                        chunk = await response.content.read(32 * 1024)
+                        if not chunk:
+                            break
+                        file.write(chunk)
             else:
                 print(f"\nНе удалось скачать файл {url}. Статус код: {response.status}\n")
         next(update_progress)
@@ -107,7 +109,6 @@ async def main():
                 session,
                 d['url'],
                 os.path.join(folder_path, d['name']),
-                d['size'],
                 gen,
                 semaphore
             ) for d in file_urls
